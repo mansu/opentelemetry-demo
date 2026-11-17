@@ -28,6 +28,10 @@ DOCKER_COMPOSE_FILES_PROFILING=-f compose.profiling.yaml
 DOCKER_COMPOSE_FILES_EXTRAS=-f compose.extras.yaml
 DOCKER_COMPOSE_FILES_TESTS=-f compose.tests.yaml
 DOCKER_COMPOSE_FILES_AGENT=-f compose.agent.yaml
+KALDB_DEMO_DIR=local/kaldb
+DOCKER_COMPOSE_FILES_KALDB=$(DOCKER_COMPOSE_FILES_FULL) -f $(KALDB_DEMO_DIR)/compose.kaldb.yaml $(DOCKER_COMPOSE_FILES_EXTRAS)
+DOCKER_COMPOSE_ENV_KALDB=--env-file .env --env-file .env.override --env-file $(KALDB_DEMO_DIR)/.env.kaldb
+KALDB_HOME ?= /Users/suman/code/kaldb-kaldb
 
 # Default: full demo + observability stack + extras stub
 DOCKER_COMPOSE_FILES=$(DOCKER_COMPOSE_FILES_FULL) $(DOCKER_COMPOSE_FILES_OBSERVABILITY) $(DOCKER_COMPOSE_FILES_EXTRAS)
@@ -343,6 +347,29 @@ start-no-o11y:
 	@echo "Go to http://localhost:8080/feature/ to change feature flags."
 	@echo "Go to http://localhost:8080/telemetry/ for the Weaver generated telemetry documentation."
 
+.PHONY: start-kaldb
+start-kaldb:
+	KALDB_HOME="$(KALDB_HOME)" KALDB_CLEAN="$(KALDB_CLEAN)" ./$(KALDB_DEMO_DIR)/start_kaldb.sh
+	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV_KALDB) $(DOCKER_COMPOSE_FILES_KALDB) up --force-recreate --remove-orphans --detach
+	@echo ""
+	@echo "OpenTelemetry Demo with KalDB is running."
+	@echo "Go to http://localhost:18080 for the demo UI."
+	@echo "Go to http://localhost:3000/d/kaldb-otel-demo/kaldb-otel-demo for KalDB Grafana."
+	@echo "Go to http://localhost:5601/app/discover for KalDB Dashboards."
+	@echo "Logs are exported to the otel-demo-logs KalDB dataset."
+	@echo "Traces are exported to the otel-demo-traces KalDB dataset."
+
+.PHONY: verify-kaldb
+verify-kaldb:
+	./$(KALDB_DEMO_DIR)/verify_demo.sh
+
+.PHONY: stop-kaldb
+stop-kaldb:
+	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV_KALDB) $(DOCKER_COMPOSE_FILES_KALDB) down --remove-orphans --volumes
+	cd "$(KALDB_HOME)" && $(DOCKER_COMPOSE_CMD) down --remove-orphans
+	@echo ""
+	@echo "OpenTelemetry Demo and local KalDB stack are stopped."
+
 .PHONY: start-minimal-no-o11y
 start-minimal-no-o11y:
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES_CORE) $(DOCKER_COMPOSE_FILES_EXTRAS) up --force-recreate --remove-orphans --detach
@@ -417,3 +444,16 @@ endif
 .PHONY: build-react-native-android
 build-react-native-android:
 	$(DOCKER_CMD) build -f src/react-native-app/android.Dockerfile --platform=linux/amd64 --output=. src/react-native-app
+
+.PHONY: start-kaldb-permissions verify-kaldb-permissions showcase-kaldb-permissions stop-kaldb-permissions
+start-kaldb-permissions:
+	KALDB_HOME="$(KALDB_HOME)" ./local/kaldb/permissions/security_demo.sh start
+
+verify-kaldb-permissions:
+	./local/kaldb/permissions/security_demo.sh verify all
+
+showcase-kaldb-permissions:
+	./local/kaldb/permissions/security_demo.sh showcase
+
+stop-kaldb-permissions:
+	./local/kaldb/permissions/security_demo.sh stop
